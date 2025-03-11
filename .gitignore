@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environments
+.env
+.venv/
+venv/
+
+# Streamlit
+.streamlit/config.toml
+
+# Secrets
+*.json
+*.key
