@@ -23,16 +23,65 @@ def main():
     st.title("BigBasket Stock Availability Dashboard")
     
     try:
-        df = get_google_sheets_data()
+        # Status: Loading data
+        with st.status("Loading data from Google Sheets...", expanded=True) as status:
+            df = get_google_sheets_data()
+            st.write("✅ Data loaded successfully!")
+            status.update(label="Data loaded!", state="complete", expanded=False)
         
-        # Your original logic remains here
+        # Debug: Show raw data
+        with st.expander("🔍 Raw Data Preview"):
+            st.dataframe(df.head(3))
+            st.write("Columns in Data:", df.columns.tolist())
+        
+        # Check if 'Brand' column exists
+        if 'Brand' not in df.columns:
+            st.error("❌ 'Brand' column not found in data. Available columns: " + str(df.columns.tolist()))
+            return
+        
+        # Get unique brands
         brands = df['Brand'].unique()
-        selected_brand = st.selectbox("Select a Brand", brands)
         
-        # ... [Keep all your original code from def main()] ...
-
+        # Brand selection
+        selected_brand = st.selectbox("Select a Brand", brands)
+        st.success(f"✅ Selected Brand: **{selected_brand}**")
+        
+        # Filter data for selected brand
+        with st.spinner(f"Filtering data for {selected_brand}..."):
+            brand_data = df[df['Brand'] == selected_brand]
+            st.write(f"📊 Found **{len(brand_data)}** products for **{selected_brand}**")
+        
+        # Stock analysis
+        st.subheader(f"📈 Stock Analysis for {selected_brand}")
+        
+        # Count products
+        with st.spinner("Calculating stock metrics..."):
+            total_products = len(brand_data)
+            in_stock = len(brand_data[brand_data['Stock Availability'] == 'N/A'])
+            out_of_stock = len(brand_data[brand_data['Stock Availability'] == 'Currently unavailable'])
+        
+        # Display metrics
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total Products", total_products)
+            st.metric("In Stock", in_stock)
+        with col2:
+            st.metric("Out of Stock", out_of_stock)
+        
+        # List out-of-stock products
+        if out_of_stock > 0:
+            st.subheader("❌ Out of Stock Products")
+            out_of_stock_products = brand_data[brand_data['Stock Availability'] == 'Currently unavailable']
+            st.table(out_of_stock_products[['Product', 'Pack', 'Discounted Price']])
+        else:
+            st.success("✅ All products are currently in stock!")
+            
+        # Show all products
+        st.subheader("📦 All Products")
+        st.dataframe(brand_data[['Product', 'Stock Availability', 'Discounted Price', 'Pack']])
+        
     except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
+        st.error(f"❌ Error loading data: {str(e)}")
 
 if __name__ == "__main__":
     main()
