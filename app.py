@@ -55,55 +55,90 @@ def send_stockout_email(brand, email, out_of_stock_products):
         return False
 
 def main():
-    # Set page config for professional look
+    # Set page config
     st.set_page_config(
         page_title="BigBasket Stock Dashboard",
         page_icon="📊",
-        layout="wide"
+        layout="wide",
+        initial_sidebar_state="expanded"
     )
 
-    # Custom CSS for better UI
+    # Professional Helium10-inspired CSS
     st.markdown("""
     <style>
-    .main {background-color: #f8f9fa;}
-    .stButton>button {background-color: #0066cc; color: white;}
-    .stSelectbox {margin-bottom: 20px;}
-    .metric-card {background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
+    .main {background-color: #1a1a1a; color: #ffffff;}
+    .sidebar .sidebar-content {background-color: #2d2d2d; color: #ffffff;}
+    h1, h2, h3, h4 {color: #00d4b4;}
+    .stButton>button {
+        background-color: #00d4b4;
+        color: #ffffff;
+        border-radius: 5px;
+        border: none;
+        padding: 10px 20px;
+    }
+    .stButton>button:hover {
+        background-color: #00b394;
+    }
+    .metric-card {
+        background-color: #2d2d2d;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        margin: 10px 0;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: #2d2d2d;
+        border-bottom: 2px solid #00d4b4;
+    }
+    .stTabs [data-baseweb="tab"] {
+        color: #ffffff;
+        padding: 10px 20px;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #3d3d3d;
+    }
+    .stTabs [aria-selected="true"] {
+        border-bottom: 2px solid #00d4b4;
+        color: #00d4b4;
+    }
+    .stDataFrame {background-color: #2d2d2d; color: #ffffff;}
     </style>
     """, unsafe_allow_html=True)
 
-    st.title("📊 BigBasket Stock Availability Dashboard")
-    st.markdown("Monitor stock levels across multiple brands in real-time")
+    st.title("📊 BigBasket Stock Dashboard")
+    st.markdown("Real-time stock monitoring and analytics", style="color: #b0b0b0;")
 
     # Initialize session state
     if 'data_loaded' not in st.session_state:
         st.session_state.data_loaded = False
     if 'brand_emails' not in st.session_state:
         st.session_state.brand_emails = {}
-    
+    if 'email_sent' not in st.session_state:
+        st.session_state.email_sent = {}
+
     # Sidebar for email configuration
     with st.sidebar:
-        st.header("⚙️ Configuration")
+        st.header("⚙️ Settings")
         with st.form("email_config"):
-            st.subheader("Brand Email Setup")
-            brand_name = st.text_input("Brand Name")
-            email = st.text_input("Notification Email")
+            st.subheader("Brand Email Configuration")
+            brand_name = st.text_input("Brand Name", key="brand_input")
+            email = st.text_input("Notification Email", key="email_input")
             if st.form_submit_button("Add Brand Email"):
                 if brand_name and email:
                     st.session_state.brand_emails[brand_name] = email
                     st.success(f"Added email for {brand_name}")
+                    # Reset email sent flag for this brand
+                    if brand_name in st.session_state.email_sent:
+                        del st.session_state.email_sent[brand_name]
             st.write("Configured Brands:", st.session_state.brand_emails)
 
     # Main content
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.button("🔄 Load Data and Analyze", type="primary"):
-            with st.status("Fetching latest stock data...", expanded=True) as status:
-                df = get_google_sheets_data()
-                st.session_state.df = df
-                st.session_state.data_loaded = True
-                st.write("✅ Data loaded successfully!")
-                status.update(label="Data refresh complete!", state="complete", expanded=False)
+    if st.button("🔄 Refresh Data", type="primary"):
+        with st.spinner("Fetching latest stock data..."):
+            df = get_google_sheets_data()
+            st.session_state.df = df
+            st.session_state.data_loaded = True
+            st.success("Data refreshed successfully!")
 
     if st.session_state.data_loaded:
         df = st.session_state.df
@@ -112,7 +147,7 @@ def main():
         required_columns = ['Brand', 'Product', 'Stock Availability', 'Discounted Price', 'Pack']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
-            st.error(f"❌ Missing columns in data: {missing_columns}")
+            st.error(f"Missing columns in data: {missing_columns}")
             return
 
         # Multi-brand selection
@@ -125,7 +160,6 @@ def main():
         )
 
         if selected_brands:
-            # Filter data for selected brands
             brand_data = df[df['Brand'].isin(selected_brands)]
             
             # Tabs for different views
@@ -143,15 +177,15 @@ def main():
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                        st.metric("Total Products", total)
+                        st.metric("Total Products", total, delta_color="off")
                         st.markdown('</div>', unsafe_allow_html=True)
                     with col2:
                         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                        st.metric("In Stock", in_stock)
+                        st.metric("In Stock", in_stock, delta_color="off")
                         st.markdown('</div>', unsafe_allow_html=True)
                     with col3:
                         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                        st.metric("Out of Stock", out_of_stock)
+                        st.metric("Out of Stock", out_of_stock, delta_color="off")
                         st.markdown('</div>', unsafe_allow_html=True)
 
             with tab2:
@@ -163,11 +197,13 @@ def main():
                         st.markdown(f"#### {brand}")
                         st.table(out_of_stock_df[['Product', 'Pack', 'Discounted Price']])
                         if brand in st.session_state.brand_emails:
-                            if st.button(f"📧 Send Stock Alert for {brand}"):
+                            # Auto-send email if not already sent
+                            if brand not in st.session_state.email_sent or not st.session_state.email_sent[brand]:
                                 if send_stockout_email(brand, st.session_state.brand_emails[brand], out_of_stock_df):
-                                    st.success(f"Stock alert sent to {st.session_state.brand_emails[brand]}")
+                                    st.success(f"Auto-sent stock alert to {st.session_state.brand_emails[brand]}")
+                                    st.session_state.email_sent[brand] = True
                     else:
-                        st.success(f"✅ All {brand} products are in stock!")
+                        st.success(f"All {brand} products are in stock!")
 
             with tab3:
                 st.subheader("All Products")
