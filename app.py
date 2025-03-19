@@ -65,13 +65,14 @@ def main():
         page_title="BigBasket Stock Dashboard",
         page_icon="📊",
         layout="wide",
-        initial_sidebar_state="collapsed"  # Sidebar hidden initially
+        initial_sidebar_state="expanded"
     )
 
-    # Professional Helium10-inspired CSS
+    # Professional Helium10-inspired CSS (from your original code)
     st.markdown("""
     <style>
     .main {background-color: #1a1a1a; color: #ffffff;}
+    .sidebar .sidebar-content {background-color: #2d2d2d; color: #ffffff;}
     h1, h2, h3, h4 {color: #00d4b4;}
     .stButton>button {
         background-color: #00d4b4;
@@ -106,7 +107,6 @@ def main():
         color: #00d4b4;
     }
     .stDataFrame {background-color: #2d2d2d; color: #ffffff;}
-    .center-form {max-width: 500px; margin: 50px auto; padding: 20px; background-color: #2d2d2d; border-radius: 10px;}
     </style>
     """, unsafe_allow_html=True)
 
@@ -115,44 +115,37 @@ def main():
 
     # Initialize session state
     if 'data_loaded' not in st.session_state:
-        with st.spinner("Loading data from Google Sheets..."):
-            df = get_google_sheets_data()
-            st.session_state.df = df
-            st.session_state.data_loaded = True
+        st.session_state.data_loaded = False
     if 'brand_emails' not in st.session_state:
         st.session_state.brand_emails = {}
     if 'email_sent' not in st.session_state:
         st.session_state.email_sent = {}
-    if 'show_results' not in st.session_state:
-        st.session_state.show_results = False
 
-    # Center form for brand entry on initial load
-    if not st.session_state.show_results:
-        with st.container():
-            st.markdown('<div class="center-form">', unsafe_allow_html=True)
-            st.subheader("Add Brands to Monitor")
-            with st.form("brand_config"):
-                brand_name = st.text_input("Brand Name")
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    if st.form_submit_button("Add Brand"):
-                        if brand_name and brand_name not in st.session_state.brand_emails:
-                            st.session_state.brand_emails[brand_name] = None  # No email yet
-                            st.success(f"Added {brand_name}")
-                        elif brand_name in st.session_state.brand_emails:
-                            st.warning(f"{brand_name} already added!")
-                        else:
-                            st.error("Please enter a brand name.")
-                with col2:
-                    if st.form_submit_button("Load Results"):
-                        if st.session_state.brand_emails:
-                            st.session_state.show_results = True
-                        else:
-                            st.error("Add at least one brand to load results!")
-            st.markdown('</div>', unsafe_allow_html=True)
+    # Sidebar for email configuration
+    with st.sidebar:
+        st.header("⚙️ Settings")
+        with st.form("email_config"):
+            st.subheader("Brand Email Configuration")
+            brand_name = st.text_input("Brand Name", key="brand_input")
+            email = st.text_input("Notification Email", key="email_input")
+            if st.form_submit_button("Add Brand Email"):
+                if brand_name and email:
+                    st.session_state.brand_emails[brand_name] = email
+                    st.success(f"Added email for {brand_name}")
+                    # Reset email sent flag for this brand
+                    if brand_name in st.session_state.email_sent:
+                        del st.session_state.email_sent[brand_name]
+            st.write("Configured Brands:", st.session_state.brand_emails)
 
-    # Show results after loading
-    if st.session_state.show_results and st.session_state.data_loaded:
+    # Main content
+    if st.button("🔄 Refresh Data", type="primary"):
+        with st.spinner("Fetching latest stock data..."):
+            df = get_google_sheets_data()
+            st.session_state.df = df
+            st.session_state.data_loaded = True
+            st.success("Data refreshed successfully!")
+
+    if st.session_state.data_loaded:
         df = st.session_state.df
         
         # Verify required columns
@@ -162,30 +155,12 @@ def main():
             st.error(f"Missing columns in data: {missing_columns}")
             return
 
-        # Display configured brands with email option
-        st.subheader("Configured Brands")
-        for brand in list(st.session_state.brand_emails.keys()):
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.write(f"- {brand}")
-            with col2:
-                if st.session_state.brand_emails[brand] is None:
-                    with st.form(f"email_form_{brand}", clear_on_submit=True):
-                        email = st.text_input(f"Email for {brand}", key=f"email_{brand}")
-                        if st.form_submit_button("Add Email"):
-                            if email:
-                                st.session_state.brand_emails[brand] = email
-                                st.success(f"Email added for {brand}")
-                            else:
-                                st.error("Please enter an email.")
-                else:
-                    st.write(f"Email: {st.session_state.brand_emails[brand]}")
-
-        # Multi-brand selection from configured brands
+        # Multi-brand selection
+        brands = df['Brand'].unique()
         selected_brands = st.multiselect(
             "Select Brands to Monitor (up to 10)",
-            options=list(st.session_state.brand_emails.keys()),
-            default=list(st.session_state.brand_emails.keys())[:1],
+            options=brands,
+            default=[brands[0]] if brands.size > 0 else [],
             max_selections=10
         )
 
@@ -226,10 +201,12 @@ def main():
                     if not out_of_stock_df.empty:
                         st.markdown(f"#### {brand}")
                         st.table(out_of_stock_df[['Product', 'Pack', 'Discounted Price']])
-                        if st.session_state.brand_emails[brand] and (brand not in st.session_state.email_sent or not st.session_state.email_sent[brand]):
-                            if send_stockout_email(brand, st.session_state.brand_emails[brand], out_of_stock_df):
-                                st.success(f"Auto-sent stock alert to {st.session_state.brand_emails[brand]}")
-                                st.session_state.email_sent[brand] = True
+                        if brand in st.session_state.brand_emails:
+                            # Auto-send email if not already sent
+                            if brand not in st.session_state.email_sent or not st.session_state.email_sent[brand]:
+                                if send_stockout_email(brand, st.session_state.brand_emails[brand], out_of_stock_df):
+                                    st.success(f"Auto-sent stock alert to {st.session_state.brand_emails[brand]}")
+                                    st.session_state.email_sent[brand] = True
                     else:
                         st.success(f"All {brand} products are in stock!")
 
