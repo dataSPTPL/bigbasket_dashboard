@@ -20,7 +20,7 @@ def get_google_sheets_data(spreadsheet_name="POLKA"):
     data = sheet.get_all_records()
     return pd.DataFrame(data)
 
-# Email notification function
+# Email notification function with debug
 def send_stockout_email(brand, email, out_of_stock_products):
     sender_email = st.secrets["email"]["sender"]
     sender_password = st.secrets["email"]["password"]
@@ -44,11 +44,16 @@ def send_stockout_email(brand, email, out_of_stock_products):
     msg['From'] = sender_email
     msg['To'] = email
     
+    # Debug: Show sender and recipient details
+    st.write(f"DEBUG: Attempting to send email from {sender_email} to {email}")
+    st.write(f"DEBUG: Subject: {subject}")
+    
     try:
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
             server.starttls()
             server.login(sender_email, sender_password)
             server.send_message(msg)
+        st.write(f"DEBUG: Email successfully sent to {email}")
         return True
     except Exception as e:
         st.error(f"Failed to send email to {email}: {str(e)}")
