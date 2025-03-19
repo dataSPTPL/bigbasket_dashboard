@@ -106,7 +106,8 @@ def main():
     """, unsafe_allow_html=True)
 
     st.title("📊 BigBasket Stock Dashboard")
-    st.markdown("Real-time stock monitoring and analytics", style="color: #b0b0b0;")
+    # Fixed: Embed style in Markdown with HTML
+    st.markdown('<span style="color: #b0b0b0;">Real-time stock monitoring and analytics</span>', unsafe_allow_html=True)
 
     # Initialize session state
     if 'data_loaded' not in st.session_state:
